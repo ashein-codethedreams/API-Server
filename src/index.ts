@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import todoRoutes from './routes/todo.ts'
 import swaggerRoutes from './middleware/Swagger.ts'
 import { swaggerUI } from '@hono/swagger-ui'
+import { Scalar } from '@scalar/hono-api-reference'
 
 const app = new Hono()
 const runtimeEnv = (globalThis as {
@@ -14,6 +15,7 @@ app.route('/', swaggerRoutes)
 
 // Use the middleware to serve Swagger UI at /ui
 app.get('/ui', swaggerUI({ url: '/doc' }))
+app.get('/scalar', Scalar({ url: '/doc' }))
 
 serve({
   fetch: app.fetch,
