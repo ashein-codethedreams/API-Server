@@ -4,6 +4,7 @@ import todoRoutes from './routes/todo.ts'
 import swaggerRoutes from './middleware/Swagger.ts'
 import { swaggerUI } from '@hono/swagger-ui'
 import { Scalar } from '@scalar/hono-api-reference'
+import { HomePage } from './ui/Home.tsx'
 
 const app = new Hono()
 const runtimeEnv = (globalThis as {
@@ -12,6 +13,8 @@ const runtimeEnv = (globalThis as {
 
 app.route("/todos",todoRoutes)
 app.route('/', swaggerRoutes)
+
+app.get('/', (c) => c.html(HomePage()))
 
 // Use the middleware to serve Swagger UI at /ui
 app.get('/ui', swaggerUI({ url: '/doc' }))
