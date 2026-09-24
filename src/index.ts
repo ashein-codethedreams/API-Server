@@ -1,6 +1,8 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import todoRoutes from './routes/todo.ts'
+import swaggerRoutes from './middleware/Swagger.ts'
+import { swaggerUI } from '@hono/swagger-ui'
 
 const app = new Hono()
 const runtimeEnv = (globalThis as {
@@ -8,6 +10,10 @@ const runtimeEnv = (globalThis as {
 }).process?.env ?? {}
 
 app.route("/todos",todoRoutes)
+app.route('/', swaggerRoutes)
+
+// Use the middleware to serve Swagger UI at /ui
+app.get('/ui', swaggerUI({ url: '/doc' }))
 
 serve({
   fetch: app.fetch,
