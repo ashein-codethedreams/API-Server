@@ -11,5 +11,6 @@
     "outDir": "./dist",
     "rewriteRelativeImportExtensions": true
   },
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "api"]
 }
