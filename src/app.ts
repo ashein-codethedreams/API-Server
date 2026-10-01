@@ -5,8 +5,11 @@ import { swaggerUI } from '@hono/swagger-ui'
 import { Scalar } from '@scalar/hono-api-reference'
 import { HomePage } from './ui/Home.ts'
 import { NotFoundPage } from './ui/NotFound.ts'
+import { requestId } from 'hono/request-id'
 
 export const app = new Hono()
+
+app.use(requestId())
 
 app.route('/todos', todoRoutes)
 app.route('/', swaggerRoutes)
