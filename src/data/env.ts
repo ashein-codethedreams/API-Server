@@ -9,6 +9,11 @@ const envSchema = z.object({
   DB_NAME: z.string(),
   JWT_SECRET: z.string().min(32),
   PORT: z.string().optional(),
+  CORS_ORIGINS: z.string().optional().transform((origins) =>
+    origins?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+    ]),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

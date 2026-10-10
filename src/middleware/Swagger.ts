@@ -59,6 +59,7 @@ const openApiDoc = {
           },
           '400': { description: 'Invalid request body' },
           '409': { description: 'Email is already registered' },
+          '429': { description: 'Too many authentication requests' },
         },
       },
     },
@@ -85,28 +86,39 @@ const openApiDoc = {
           },
           '400': { description: 'Invalid request body' },
           '401': { description: 'Invalid email or password' },
+          '429': { description: 'Too many authentication requests' },
         },
       },
     },
     '/todos': {
       get: {
         tags: ['Todos'],
-        summary: 'List all todos',
+        summary: 'List todos with pagination',
         security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'page',
+            in: 'query',
+            description: 'One-based page number (maximum 1,000,000)',
+            schema: { type: 'integer', minimum: 1, maximum: 1000000, default: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            description: 'Number of todos per page',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        ],
         responses: {
           '200': {
-            description: 'A list of todos',
+            description: 'A page of todos',
             content: {
               'application/json': {
-                schema: {
-                  type: 'array',
-                  items: {
-                    $ref: '#/components/schemas/Todo',
-                  },
-                },
+                schema: { $ref: '#/components/schemas/TodoPage' },
               },
             },
           },
+          '400': { description: 'Invalid query parameters' },
         },
       },
       post: {
@@ -292,6 +304,26 @@ const openApiDoc = {
           userId: {
             type: 'integer',
             example: 1,
+          },
+        },
+      },
+      TodoPage: {
+        type: 'object',
+        required: ['data', 'pagination'],
+        properties: {
+          data: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/Todo' },
+          },
+          pagination: {
+            type: 'object',
+            required: ['page', 'limit', 'totalItems', 'totalPages'],
+            properties: {
+              page: { type: 'integer', example: 1 },
+              limit: { type: 'integer', example: 20 },
+              totalItems: { type: 'integer', example: 42 },
+              totalPages: { type: 'integer', example: 3 },
+            },
           },
         },
       },

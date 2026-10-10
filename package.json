@@ -3,6 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "test": "tsc -p tsconfig.test.json && tsx --test tests/app.test.ts tests/middleware/rate-limit.test.ts",
     "build": "tsc",
     "vercel-build": "tsc --noEmit",
     "start": "node dist/index.js"

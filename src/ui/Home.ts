@@ -106,6 +106,9 @@ export const HomePage = () => html`<!doctype html>
       .account-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 20px; }
       .account-email { overflow-wrap: anywhere; color: var(--cyan); font-size: 12px; }
       .todo-delete { margin-left: auto; padding: 6px 9px; border-color: var(--line); background: transparent; color: var(--coral); }
+      .todo-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; }
+      .todo-pagination[hidden] { display: none; }
+      .todo-page-label { color: var(--muted); font-size: 11px; }
       footer { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding: 20px 0 28px; color: var(--dim); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
       @media (max-width: 760px) {
         .shell { width: min(100% - 28px, 600px); }
@@ -177,6 +180,11 @@ export const HomePage = () => html`<!doctype html>
           </div>
           <p id="auth-message" class="auth-message" role="status" aria-live="polite">Sign in or create an account to load your todos.</p>
           <div id="todo-list" aria-live="polite"></div>
+          <nav id="todo-pagination" class="todo-pagination" aria-label="Todo pages" hidden>
+            <button id="todo-previous" class="secondary" type="button">Previous</button>
+            <span id="todo-page-label" class="todo-page-label"></span>
+            <button id="todo-next" class="secondary" type="button">Next</button>
+          </nav>
         </div>
       </section>
 
@@ -192,6 +200,7 @@ export const HomePage = () => html`<!doctype html>
       const authMessage = document.getElementById('auth-message');
       const todoForm = document.getElementById('todo-create');
       let accessToken = null;
+      let currentPage = 1;
 
       function setMessage(message, isError) {
         authMessage.textContent = message;
@@ -221,8 +230,16 @@ export const HomePage = () => html`<!doctype html>
         return data;
       }
 
-      function renderTodos(todos) {
+      function renderTodos(todos, pagination) {
         todoList.replaceChildren();
+        const paginationControls = document.getElementById('todo-pagination');
+        paginationControls.hidden = !pagination || pagination.totalPages <= 1;
+        if (pagination) {
+          document.getElementById('todo-previous').disabled = pagination.page <= 1;
+          document.getElementById('todo-next').disabled = pagination.page >= pagination.totalPages;
+          document.getElementById('todo-page-label').textContent =
+            pagination.totalPages === 0 ? 'No pages' : 'Page ' + pagination.page + ' of ' + pagination.totalPages;
+        }
         if (todos.length === 0) {
           const empty = document.createElement('div');
           empty.className = 'loading';
@@ -260,11 +277,16 @@ export const HomePage = () => html`<!doctype html>
         });
       }
 
-      async function loadTodos() {
-        const todos = await readJson(await fetch('/todos', {
+      async function loadTodos(page) {
+        const requestedPage = page || currentPage;
+        const result = await readJson(await fetch('/todos?page=' + requestedPage, {
           headers: { Authorization: 'Bearer ' + accessToken }
         }));
-        renderTodos(todos);
+        if (result.pagination.totalPages > 0 && requestedPage > result.pagination.totalPages) {
+          return loadTodos(result.pagination.totalPages);
+        }
+        currentPage = result.pagination.page;
+        renderTodos(result.data, result.pagination);
       }
 
       fetch('/health').then((response) => response.text()).then((value) => {
@@ -319,7 +341,7 @@ export const HomePage = () => html`<!doctype html>
           }));
           todoForm.reset();
           setMessage('Todo added.', false);
-          await loadTodos();
+          await loadTodos(1);
         } catch (error) {
           setMessage(error.message, true);
         } finally {
@@ -327,8 +349,25 @@ export const HomePage = () => html`<!doctype html>
         }
       });
 
+      document.getElementById('todo-previous').addEventListener('click', async () => {
+        try {
+          await loadTodos(currentPage - 1);
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      });
+
+      document.getElementById('todo-next').addEventListener('click', async () => {
+        try {
+          await loadTodos(currentPage + 1);
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      });
+
       document.getElementById('logout').addEventListener('click', () => {
         accessToken = null;
+        currentPage = 1;
         authForm.hidden = false;
         accountPanel.hidden = true;
         renderTodos([]);

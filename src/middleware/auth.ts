@@ -1,6 +1,7 @@
 import { sign, verify } from "hono/jwt"
 import type { MiddlewareHandler } from "hono"
 import { env } from "../data/env.ts"
+import type { RequestIdVariables } from "hono/request-id"
 
 const issuer = "my-api-server"
 const accessTokenLifetimeSeconds = 60 * 60
@@ -13,7 +14,7 @@ export type AuthUser = {
 export type AppEnv = {
   Variables: {
     user: AuthUser
-  }
+  } & RequestIdVariables
 }
 
 export async function createAccessToken(user: AuthUser): Promise<string> {
