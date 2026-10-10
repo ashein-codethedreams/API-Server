@@ -9,6 +9,10 @@ const openApiDoc = {
   },
   tags: [
     {
+      name: 'Authentication',
+      description: 'Register accounts and issue access tokens',
+    },
+    {
       name: 'Todos',
       description: 'Create and manage todo items',
     },
@@ -32,10 +36,63 @@ const openApiDoc = {
         },
       },
     },
+    '/auth/register': {
+      post: {
+        tags: ['Authentication'],
+        summary: 'Register an account',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Credentials' },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Account created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid request body' },
+          '409': { description: 'Email is already registered' },
+        },
+      },
+    },
+    '/auth/login': {
+      post: {
+        tags: ['Authentication'],
+        summary: 'Sign in and receive an access token',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Credentials' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Signed in',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid request body' },
+          '401': { description: 'Invalid email or password' },
+        },
+      },
+    },
     '/todos': {
       get: {
         tags: ['Todos'],
         summary: 'List all todos',
+        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'A list of todos',
@@ -55,6 +112,7 @@ const openApiDoc = {
       post: {
         tags: ['Todos'],
         summary: 'Create a todo',
+        security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -98,6 +156,7 @@ const openApiDoc = {
       get: {
         tags: ['Todos'],
         summary: 'Get a todo by ID',
+        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'Todo found',
@@ -124,6 +183,7 @@ const openApiDoc = {
       put: {
         tags: ['Todos'],
         summary: 'Update a todo',
+        security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -156,6 +216,7 @@ const openApiDoc = {
       delete: {
         tags: ['Todos'],
         summary: 'Delete a todo',
+        security: [{ BearerAuth: [] }],
         responses: {
           '200': {
             description: 'Todo deleted',
@@ -182,10 +243,43 @@ const openApiDoc = {
     },
   },
   components: {
+    securitySchemes: {
+      BearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+    },
     schemas: {
+      Credentials: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', format: 'email', maxLength: 254 },
+          password: { type: 'string', minLength: 12, maxLength: 128 },
+        },
+      },
+      AuthResponse: {
+        type: 'object',
+        required: ['accessToken', 'tokenType', 'expiresIn', 'user'],
+        properties: {
+          accessToken: { type: 'string' },
+          tokenType: { type: 'string', example: 'Bearer' },
+          expiresIn: { type: 'integer', example: 3600 },
+          user: { $ref: '#/components/schemas/User' },
+        },
+      },
+      User: {
+        type: 'object',
+        required: ['id', 'email'],
+        properties: {
+          id: { type: 'integer', example: 1 },
+          email: { type: 'string', format: 'email', example: 'person@example.com' },
+        },
+      },
       Todo: {
         type: 'object',
-        required: ['id', 'title'],
+        required: ['id', 'title', 'userId'],
         properties: {
           id: {
             type: 'integer',
@@ -194,6 +288,10 @@ const openApiDoc = {
           title: {
             type: 'string',
             example: 'Learn Hono',
+          },
+          userId: {
+            type: 'integer',
+            example: 1,
           },
         },
       },

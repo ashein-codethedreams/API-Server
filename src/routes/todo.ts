@@ -1,10 +1,13 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { db } from '../db/db.ts'
 import { TodoTable } from '../db/schema/todos.ts'
-const app = new Hono()
+import { requireAuth, type AppEnv } from '../middleware/auth.ts'
+const app = new Hono<AppEnv>()
+
+app.use('*', requireAuth)
 
 
 const createTodoSchema = z.object({
@@ -16,7 +19,7 @@ const updateTodoSchema = z.object({
 })
 
 app.get('/', async (c) => {
-  const todos = await db.select().from(TodoTable)
+  const todos = await db.select().from(TodoTable).where(eq(TodoTable.userId, c.get('user').id))
   return c.json(todos)
 })
 
@@ -26,7 +29,9 @@ app.get('/:id', async (c) => {
     return c.json({ error: 'Invalid todo id' }, 400)
   }
 
-  const [todo] = await db.select().from(TodoTable).where(eq(TodoTable.id, id)).limit(1)
+  const [todo] = await db.select().from(TodoTable)
+    .where(and(eq(TodoTable.id, id), eq(TodoTable.userId, c.get('user').id)))
+    .limit(1)
   if (!todo) {
     return c.json({ error: 'Todo not found' }, 404)
   }
@@ -35,7 +40,9 @@ app.get('/:id', async (c) => {
 
 app.post('/', zValidator('json', createTodoSchema), async (c) => {
   const data = c.req.valid("json")
-  const [todo] = await db.insert(TodoTable).values(data).returning()
+  const [todo] = await db.insert(TodoTable)
+    .values({ ...data, userId: c.get('user').id })
+    .returning()
   return c.json(todo, 201)
 })
 
@@ -47,7 +54,9 @@ app.put('/:id', zValidator('json', updateTodoSchema), async (c) => {
 
   const data = c.req.valid('json')
   if (data.title === undefined) {
-    const [todo] = await db.select().from(TodoTable).where(eq(TodoTable.id, id)).limit(1)
+    const [todo] = await db.select().from(TodoTable)
+      .where(and(eq(TodoTable.id, id), eq(TodoTable.userId, c.get('user').id)))
+      .limit(1)
     if (!todo) {
       return c.json({ error: 'Todo not found' }, 404)
     }
@@ -57,7 +66,7 @@ app.put('/:id', zValidator('json', updateTodoSchema), async (c) => {
   const [todo] = await db
     .update(TodoTable)
     .set(data)
-    .where(eq(TodoTable.id, id))
+    .where(and(eq(TodoTable.id, id), eq(TodoTable.userId, c.get('user').id)))
     .returning()
   if (!todo) {
     return c.json({ error: 'Todo not found' }, 404)
@@ -73,7 +82,7 @@ app.delete('/:id', async (c) => {
 
   const [deletedTodo] = await db
     .delete(TodoTable)
-    .where(eq(TodoTable.id, id))
+    .where(and(eq(TodoTable.id, id), eq(TodoTable.userId, c.get('user').id)))
     .returning({ id: TodoTable.id })
   if (!deletedTodo) {
     return c.json({ error: 'Todo not found' }, 404)

@@ -7,6 +7,7 @@ const envSchema = z.object({
   DB_HOST: z.string(),
   DB_PORT: z.string().transform((val) => parseInt(val, 10)),
   DB_NAME: z.string(),
+  JWT_SECRET: z.string().min(32),
   PORT: z.string().optional(),
 });
 

@@ -77,6 +77,35 @@ export const HomePage = () => html`<!doctype html>
       .todo-id { color: var(--coral); width: 25px; }
       .todo-title { color: var(--muted); }
       .loading { color: var(--dim); padding: 22px 0; font-size: 12px; }
+      .auth-form, .todo-create { display: grid; gap: 12px; }
+      .auth-fields { display: grid; gap: 10px; }
+      .auth-fields label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+      .auth-fields input, .todo-create input {
+        min-width: 0;
+        padding: 12px;
+        background: #0b0f0d;
+        border: 1px solid var(--line);
+        color: var(--ink);
+        font: inherit;
+        font-size: 12px;
+      }
+      .auth-actions { display: flex; gap: 10px; }
+      button {
+        padding: 10px 13px;
+        border: 1px solid var(--lime);
+        background: var(--lime);
+        color: var(--bg);
+        cursor: pointer;
+        font: inherit;
+        font-size: 11px;
+      }
+      button.secondary { background: transparent; color: var(--lime); }
+      button:disabled { cursor: wait; opacity: .6; }
+      .auth-message { min-height: 18px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+      .auth-message.error { color: var(--coral); }
+      .account-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 20px; }
+      .account-email { overflow-wrap: anywhere; color: var(--cyan); font-size: 12px; }
+      .todo-delete { margin-left: auto; padding: 6px 9px; border-color: var(--line); background: transparent; color: var(--coral); }
       footer { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding: 20px 0 28px; color: var(--dim); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
       @media (max-width: 760px) {
         .shell { width: min(100% - 28px, 600px); }
@@ -100,11 +129,11 @@ export const HomePage = () => html`<!doctype html>
         <div>
           <p class="eyebrow">Hono-powered workspace</p>
           <h1>Small API.<br /><em>Sharp edges.</em></h1>
-          <p class="hero-copy">A fast, uncomplicated home for your todo service. Inspect the contract, try the endpoints, or jump straight into the data.</p>
+          <p class="hero-copy">A fast, uncomplicated home for your todo service. Create an account to manage private todos, or inspect the API contract.</p>
         </div>
         <aside class="hero-aside">
           <span class="aside-label">quick start</span>
-          <div class="terminal"><span class="comment">// make a request</span><br /><strong>$</strong> curl /todos<br /><span class="comment">// ship the next idea</span><br /><strong>$</strong> npm run dev</div>
+          <div class="terminal"><span class="comment">// authenticate</span><br /><strong>$</strong> POST /auth/login<br /><span class="comment">// access private data</span><br /><strong>$</strong> Bearer &lt;access-token&gt;</div>
         </aside>
       </section>
 
@@ -125,8 +154,29 @@ export const HomePage = () => html`<!doctype html>
           <div class="metric"><span class="metric-label">status</span><span class="metric-value" id="health-value">...</span></div>
         </div>
         <div class="panel">
-          <div class="section-head"><h2>Live todos</h2><a href="/todos" style="color: var(--lime); font-size: 11px;">GET /todos -&gt;</a></div>
-          <div id="todo-list"><div class="loading">Fetching the latest todos...</div></div>
+          <div class="section-head"><h2>Your workspace</h2><span>JWT protected</span></div>
+          <form id="auth-form" class="auth-form">
+            <div class="auth-fields">
+              <label>Email<input id="auth-email" name="email" type="email" autocomplete="email" required maxlength="254" /></label>
+              <label>Password<input id="auth-password" name="password" type="password" autocomplete="current-password" required minlength="12" maxlength="128" /></label>
+            </div>
+            <div class="auth-actions">
+              <button type="submit" value="login">Sign in</button>
+              <button type="submit" value="register" class="secondary">Create account</button>
+            </div>
+          </form>
+          <div id="account" hidden>
+            <div class="account-bar"><span id="account-email" class="account-email"></span><button id="logout" class="secondary" type="button">Sign out</button></div>
+            <form id="todo-create" class="todo-create">
+              <label class="aside-label" for="todo-title-input">New todo</label>
+              <div class="auth-actions">
+                <input id="todo-title-input" name="title" required maxlength="200" placeholder="What needs doing?" />
+                <button type="submit">Add</button>
+              </div>
+            </form>
+          </div>
+          <p id="auth-message" class="auth-message" role="status" aria-live="polite">Sign in or create an account to load your todos.</p>
+          <div id="todo-list" aria-live="polite"></div>
         </div>
       </section>
 
@@ -136,6 +186,87 @@ export const HomePage = () => html`<!doctype html>
       const healthLabel = document.getElementById('health-label');
       const healthValue = document.getElementById('health-value');
       const todoList = document.getElementById('todo-list');
+      const authForm = document.getElementById('auth-form');
+      const accountPanel = document.getElementById('account');
+      const accountEmail = document.getElementById('account-email');
+      const authMessage = document.getElementById('auth-message');
+      const todoForm = document.getElementById('todo-create');
+      let accessToken = null;
+
+      function setMessage(message, isError) {
+        authMessage.textContent = message;
+        authMessage.classList.toggle('error', isError);
+      }
+
+      async function readJson(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          const message = (await response.text()).trim();
+          if (!response.ok) {
+            throw new Error(message || 'Request failed (' + response.status + ')');
+          }
+          throw new Error('Expected a JSON response from the server.');
+        }
+
+        let data;
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error('The server returned invalid JSON. Please try again.');
+        }
+
+        if (!response.ok) {
+          throw new Error(data && typeof data.error === 'string' ? data.error : 'Request failed (' + response.status + ')');
+        }
+        return data;
+      }
+
+      function renderTodos(todos) {
+        todoList.replaceChildren();
+        if (todos.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'loading';
+          empty.textContent = accessToken ? 'No todos yet. Add one above.' : 'Sign in to load your todos.';
+          todoList.append(empty);
+          return;
+        }
+        todos.forEach((todo) => {
+          const row = document.createElement('div');
+          row.className = 'todo';
+          const id = document.createElement('span');
+          id.className = 'todo-id';
+          id.textContent = '#' + todo.id;
+          const title = document.createElement('span');
+          title.className = 'todo-title';
+          title.textContent = todo.title;
+          const remove = document.createElement('button');
+          remove.className = 'todo-delete';
+          remove.type = 'button';
+          remove.textContent = 'Remove';
+          remove.setAttribute('aria-label', 'Remove todo ' + todo.id);
+          remove.addEventListener('click', async () => {
+            try {
+              await readJson(await fetch('/todos/' + todo.id, {
+                method: 'DELETE',
+                headers: { Authorization: 'Bearer ' + accessToken }
+              }));
+              await loadTodos();
+            } catch (error) {
+              setMessage(error.message, true);
+            }
+          });
+          row.append(id, title, remove);
+          todoList.append(row);
+        });
+      }
+
+      async function loadTodos() {
+        const todos = await readJson(await fetch('/todos', {
+          headers: { Authorization: 'Bearer ' + accessToken }
+        }));
+        renderTodos(todos);
+      }
+
       fetch('/health').then((response) => response.text()).then((value) => {
         healthLabel.textContent = 'responding';
         healthValue.textContent = value;
@@ -143,10 +274,65 @@ export const HomePage = () => html`<!doctype html>
         healthLabel.textContent = 'unavailable';
         healthValue.textContent = 'OFFLINE';
       });
-      fetch('/todos').then((response) => response.json()).then((todos) => {
-        todoList.innerHTML = todos.map((todo) => '<div class="todo"><span class="todo-id">#' + todo.id + '</span><span class="todo-title">' + todo.title + '</span></div>').join('');
-      }).catch(() => {
-        todoList.innerHTML = '<div class="loading">Todo stream unavailable.</div>';
+
+      authForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitter = event.submitter;
+        const action = submitter && submitter.value === 'register' ? 'register' : 'login';
+        if (submitter) submitter.disabled = true;
+        setMessage(action === 'register' ? 'Creating your account...' : 'Signing in...', false);
+        try {
+          const result = await readJson(await fetch('/auth/' + action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: document.getElementById('auth-email').value,
+              password: document.getElementById('auth-password').value
+            })
+          }));
+          accessToken = result.accessToken;
+          accountEmail.textContent = result.user.email;
+          authForm.hidden = true;
+          accountPanel.hidden = false;
+          document.getElementById('auth-password').value = '';
+          setMessage('Signed in. Your todo data is private to your account.', false);
+          await loadTodos();
+        } catch (error) {
+          setMessage(error.message, true);
+        } finally {
+          if (submitter) submitter.disabled = false;
+        }
+      });
+
+      todoForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitter = todoForm.querySelector('button[type="submit"]');
+        submitter.disabled = true;
+        try {
+          await readJson(await fetch('/todos', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + accessToken
+            },
+            body: JSON.stringify({ title: document.getElementById('todo-title-input').value })
+          }));
+          todoForm.reset();
+          setMessage('Todo added.', false);
+          await loadTodos();
+        } catch (error) {
+          setMessage(error.message, true);
+        } finally {
+          submitter.disabled = false;
+        }
+      });
+
+      document.getElementById('logout').addEventListener('click', () => {
+        accessToken = null;
+        authForm.hidden = false;
+        accountPanel.hidden = true;
+        renderTodos([]);
+        setMessage('Signed out. Sign in to load your todos.', false);
       });
     </script>
   </body>

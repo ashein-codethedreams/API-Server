@@ -6,11 +6,14 @@ import { Scalar } from '@scalar/hono-api-reference'
 import { HomePage } from './ui/Home.ts'
 import { NotFoundPage } from './ui/NotFound.ts'
 import { requestId } from 'hono/request-id'
+import authRoutes from './routes/auth.ts'
+import type { AppEnv } from './middleware/auth.ts'
 
-export const app = new Hono()
+export const app = new Hono<AppEnv>()
 
 app.use(requestId())
 
+app.route('/auth', authRoutes)
 app.route('/todos', todoRoutes)
 app.route('/', swaggerRoutes)
 
